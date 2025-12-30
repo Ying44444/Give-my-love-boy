@@ -1,0 +1,338 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>致我最亲爱爱爱的：2026 浪漫星辰之旅</title>
+    <style>
+        :root {
+            --primary-glow: rgba(255, 182, 193, 0.8);
+            --accent-orange: rgba(255, 165, 0, 0.8);
+            --soft-white: #f0f0f0;
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; user-select: none; }
+
+        body, html {
+            width: 100%; height: 100%; overflow: hidden;
+            background-color: #050510;
+            font-family: 'STKaiti', 'KaiTi', 'Microsoft YaHei', serif;
+        }
+
+        canvas { display: block; position: fixed; top: 0; left: 0; z-index: 1; }
+
+        /* --- 场景1: 粒子信封 --- */
+        #scene-entrance {
+            position: fixed; width: 100%; height: 100%;
+            display: flex; justify-content: center; align-items: center;
+            z-index: 100; background: radial-gradient(circle at center, #1a1a2e 0%, #050510 100%);
+            transition: opacity 1.5s ease, transform 1.5s ease;
+        }
+
+        .envelope-wrapper { perspective: 1000px; cursor: pointer; }
+
+        .envelope {
+            width: 300px; height: 200px;
+            border: 2px solid var(--primary-glow); border-radius: 10px;
+            position: relative; transform: rotateX(20deg) rotateY(-30deg) rotateZ(10deg);
+            transition: transform 0.8s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+            background: rgba(255, 255, 255, 0.05); box-shadow: 0 0 30px var(--primary-glow);
+            display: flex; justify-content: center; align-items: center; padding: 20px; text-align: center;
+        }
+
+        .envelope:hover { transform: rotateX(0deg) rotateY(0deg) rotateZ(0deg) scale(1.1); }
+
+        .envelope-text {
+            color: var(--soft-white); font-size: 1.2rem; letter-spacing: 2px;
+            text-shadow: 0 0 10px var(--primary-glow);
+        }
+
+        /* --- 场景2: 主场景 --- */
+        #main-scene {
+            position: fixed; width: 100%; height: 100%;
+            opacity: 0; pointer-events: none; transition: opacity 2s ease; z-index: 2;
+        }
+
+        .ui-layer { position: absolute; width: 100%; height: 100%; z-index: 10; pointer-events: none; }
+
+        #timer {
+            position: absolute; top: 20px; right: 20px; color: var(--soft-white);
+            text-align: right; font-size: 0.9rem; text-shadow: 0 0 5px #000;
+            background: rgba(0, 0, 0, 0.2); padding: 10px; border-radius: 5px;
+            border-right: 2px solid var(--primary-glow);
+        }
+
+        .center-content {
+            position: absolute; top: 45%; left: 50%; transform: translate(-50%, -50%);
+            text-align: center; width: 100%;
+        }
+
+        .main-title {
+            font-size: 4rem; color: white; margin-bottom: 10px; letter-spacing: 10px;
+            text-shadow: 0 0 20px var(--primary-glow), 0 0 40px var(--primary-glow);
+        }
+
+        .sub-title { font-size: 1.5rem; color: var(--soft-white); opacity: 0.8; letter-spacing: 5px; }
+
+        .floating-quote {
+            position: absolute; pointer-events: none; color: white; font-size: 1.2rem;
+            white-space: nowrap; text-shadow: 0 0 10px rgba(255,255,255,0.8);
+            animation: floatUpFade 3s forwards; z-index: 100;
+        }
+
+        @keyframes floatUpFade {
+            0% { transform: translateY(0); opacity: 1; }
+            100% { transform: translateY(-100px); opacity: 0; }
+        }
+
+        @media (max-width: 768px) {
+            .main-title { font-size: 2.5rem; }
+            #timer { font-size: 0.7rem; }
+        }
+    </style>
+</head>
+<body>
+
+    <div id="scene-entrance">
+        <div class="envelope-wrapper" onclick="startJourney()">
+            <div class="envelope">
+                <div class="envelope-text">致我最亲爱的：<br>一场关于时光与星辰的旅行</div>
+            </div>
+        </div>
+    </div>
+
+    <div id="main-scene">
+        <div class="ui-layer">
+            <div id="timer">我们已经在一起：<br><span id="time-val">00天00时00分00秒</span></div>
+            <div class="center-content">
+                <h1 class="main-title">新年快乐</h1>
+                <p class="sub-title">2026，我们继续在一起</p>
+            </div>
+        </div>
+    </div>
+
+    <canvas id="canvas"></canvas>
+
+    <script>
+        const canvas = document.getElementById('canvas');
+        const ctx = canvas.getContext('2d');
+        let width, height, journeyStarted = false;
+        let fireworks = [], interactives = [], trail = [];
+
+        // --- 1. 2026 形状点阵预生成 ---
+        const textDots = [];
+        function initTextShape() {
+            const tempCanvas = document.createElement('canvas');
+            const tCtx = tempCanvas.getContext('2d');
+            tempCanvas.width = 240; tempCanvas.height = 100;
+            tCtx.fillStyle = '#fff';
+            tCtx.font = "bold 60px Arial";
+            tCtx.fillText("2026", 20, 70);
+            const data = tCtx.getImageData(0, 0, 240, 100).data;
+            for (let y = 0; y < 100; y += 4) {
+                for (let x = 0; x < 240; x += 4) {
+                    if (data[(y * 240 + x) * 4 + 3] > 128) {
+                        textDots.push({ x: x - 120, y: y - 50 });
+                    }
+                }
+            }
+        }
+
+        // --- 粒子类 (优化后的缓慢爆炸) ---
+        class Particle {
+            constructor(x, y, color, target = null) {
+                this.x = x; this.y = y; this.color = color;
+                this.alpha = 1;
+                this.decay = Math.random() * 0.005 + 0.005; // 变慢
+                this.target = target;
+                if (target) {
+                    this.vx = (Math.random() - 0.5) * 4;
+                    this.vy = (Math.random() - 0.5) * 4;
+                } else {
+                    const angle = Math.random() * Math.PI * 2;
+                    const speed = Math.random() * 3 + 1; // 降低初始速度
+                    this.vx = Math.cos(angle) * speed;
+                    this.vy = Math.sin(angle) * speed;
+                }
+            }
+            update() {
+                if (this.target) {
+                    const dx = (this.target.x + this.originX) - this.x;
+                    const dy = (this.target.y + this.originY) - this.y;
+                    this.vx += dx * 0.015; this.vy += dy * 0.015;
+                    this.vx *= 0.88; this.vy *= 0.88;
+                } else {
+                    this.vy += 0.03; // 极低重力感
+                    this.vx *= 0.98; this.vy *= 0.98;
+                }
+                this.x += this.vx; this.y += this.vy;
+                this.alpha -= this.decay;
+            }
+            draw() {
+                ctx.fillStyle = this.color.replace(')', `, ${this.alpha})`).replace('rgb', 'rgba');
+                ctx.fillRect(this.x, this.y, 2, 2);
+            }
+        }
+
+        class Firework {
+            constructor() {
+                this.x = Math.random() * width;
+                this.y = height;
+                this.targetY = height * (Math.random() * 0.4 + 0.1);
+                this.speed = 3;
+                this.color = `rgb(${150+Math.random()*105}, ${150+Math.random()*105}, 255)`;
+                this.exploded = false;
+                this.particles = [];
+                this.isSpecial = Math.random() < 0.2; // 20%生成2026
+            }
+            update() {
+                if (!this.exploded) {
+                    this.y -= this.speed;
+                    if (this.y <= this.targetY) { this.exploded = true; this.explode(); }
+                } else {
+                    this.particles.forEach((p, i) => {
+                        p.update();
+                        if (p.alpha <= 0) this.particles.splice(i, 1);
+                    });
+                }
+            }
+            explode() {
+                if (this.isSpecial) {
+                    textDots.forEach(dot => {
+                        const p = new Particle(this.x, this.y, "rgb(255,255,255)", dot);
+                        p.originX = this.x; p.originY = this.y;
+                        this.particles.push(p);
+                    });
+                } else {
+                    for (let i = 0; i < 60; i++) this.particles.push(new Particle(this.x, this.y, this.color));
+                }
+            }
+            draw() {
+                if (!this.exploded) {
+                    ctx.fillStyle = this.color;
+                    ctx.beginPath(); ctx.arc(this.x, this.y, 2, 0, Math.PI * 2); ctx.fill();
+                } else {
+                    this.particles.forEach(p => p.draw());
+                }
+            }
+        }
+
+        // --- 互动类 (立体孔明灯 & 橙子) ---
+        class Interactive {
+            constructor(type) {
+                this.type = type;
+                this.x = Math.random() * width;
+                this.y = height + 100;
+                this.speed = 0.5 + Math.random() * 0.8;
+                this.offset = Math.random() * 1000;
+                this.size = type === 'lantern' ? 35 : 25;
+            }
+            update() {
+                this.y -= this.speed;
+                this.x += Math.sin(Date.now() * 0.001 + this.offset) * 0.5;
+                if (this.y < -100) { this.y = height + 100; this.x = Math.random() * width; }
+            }
+            draw() {
+                ctx.save();
+                if (this.type === 'lantern') {
+                    // --- 优化: 立体孔明灯 ---
+                    ctx.translate(this.x, this.y);
+                    const grad = ctx.createLinearGradient(-15, 0, 15, 0);
+                    grad.addColorStop(0, '#cc5500'); 
+                    grad.addColorStop(0.5, '#ffcc33'); 
+                    grad.addColorStop(1, '#cc5500');
+                    ctx.shadowBlur = 15; ctx.shadowColor = "orange";
+                    ctx.fillStyle = grad;
+                    ctx.beginPath();
+                    ctx.moveTo(-12, 0); ctx.lineTo(12, 0); ctx.lineTo(15, -40); ctx.lineTo(-15, -40);
+                    ctx.closePath(); ctx.fill();
+                    // 底部微光
+                    ctx.fillStyle = "rgba(255,255,255,0.6)";
+                    ctx.beginPath(); ctx.ellipse(0, -5, 8, 3, 0, 0, Math.PI*2); ctx.fill();
+                } else {
+                    // 橙子气泡 (保持原样)
+                    ctx.beginPath(); ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2);
+                    ctx.fillStyle = "rgba(255, 165, 0, 0.7)"; ctx.fill();
+                    ctx.fillStyle = "#2d5a27"; ctx.beginPath();
+                    ctx.ellipse(this.x, this.y - this.size, 8, 4, Math.PI/4, 0, Math.PI*2); ctx.fill();
+                }
+                ctx.restore();
+            }
+        }
+
+        // --- 基础逻辑 ---
+        const quotes = ["鉴于你最近表现良好，特许你亲我一下。", "你是不是作弊了？不然怎么在我心里一直是第一。", "汇报一下：今天我也很喜欢你。", "你是我洗澡时也想回消息的人。", "众生皆苦，但你是草莓味的。", "请注意，你的小可爱已上线，请速来领走。", "我想和你玩个游戏，名字叫“一辈子不分手”。", "你的怀抱是我的专属座位，不接受预订。", "我发现你有一个很大的缺点：缺点我。", "别看书了，看我，我比较好看。", "你要是再对我这么好，我就要赖着你一辈子了。", "给你一个机会，做我的唯一。", "我这么笨，你一定要拉好我的手。", "既然你已经弄乱了我的心，什么时候来弄乱我的床？（开玩笑）", "你是我的私人财产，禁止转让。", "所有的好运气都用来遇见你了，所以现在我有点倒霉，你得宠我。", "全世界都在催你长大，但我会一直陪你做小孩。", "没关系，只要是你，晚一点也没关系。", "就算全世界都反对，我也站在你这边。", "你只管努力，剩下的交给我和运气。", "在我面前，你可以不用那么坚强。", "哪怕你偶尔搞砸了，我也觉得你很棒。", "你已经做得很好了，抱抱。", "别给自己太大压力，我会一直陪你制。", "不管发生什么，回来我都在。", "你的梦想我会支持，你的难过我会分担。", "哪怕生活偶尔有点苦，只要有你在，我就觉得甜。", "你是我的大英雄，也是我的小男孩子。", "别难过，明天我陪你去吃好吃的。", "无论你变成什么样，我都爱你最初的样子。", "你是我永远的偏爱和例外。", "别担心，一切都会好起来的，我们一起。", "在我心里，你永远是最好的。", "谢谢你一直以来对我的包容。", "我不想看世界，我只想看你。", "愿你的眼里总有光，心里总有我。", "只愿君心似我心，定不负相思意。", "山水一程，三生有幸。", "浮生万物，唯你偏爱。", "愿得一心人，白首不相离。", "与君初相识，犹如故人归。", "晓看天色暮看云，行也思君，坐也思君。", "所求皆如愿，所行化坦途，所遇皆是你。", "玲珑骰子安红豆，入骨相思知不知。", "山有木兮木有枝，心悦君兮君周知。", "一日不见，如隔三秋。", "众里寻他千百度，蓦然回首，你就在我身旁。", "愿岁并谢，与友同归。", "与君共勉，此生不换。", "枕前发尽千般愿，要休且待青山烂。", "岁月平平，唯你熠熠生辉。", "遇见你，是所有故事的开始。", "春风十里，不如你。", "余生漫漫，唯愿与君度。", "满树花开，全是你来。", "既见君子，云胡不喜。", "岁岁常欢愉，万事皆胜意，新的一年依然爱你。", "万物更新，旧疾当愈，往后余生，全都是你。", "期待跨年，更期待跨年时的你。", "今年，明年，年年，我们都要在一起。", "跨过零点，你就是我这一年里最后的思念和最初的期待。", "祝你：平安喜乐，顺遂无虞，我在身边。", "把所有的好运都许给你，你就把余生许给我吧。", "何其有幸，年岁并进。", "烟火向星辰，所愿皆成真，我的愿望是你。", "新年的第一声“爱你”，只想说给你听。", "祝你新的一年：前程似锦，心中有我。", "跨年钟声响，我在你身旁。", "哪怕万物在变，我对你的心意从不跨年。", "臭猫", "我喜欢你，超级喜欢你。", "点了多少次了？", "我想你了", "不要凶我", "傻子", "嘻嘻嘻嘻嘻嘻嘻", "不要笑挑战！", "臭猫", "我喜欢你，超级喜欢你。", "想你了", "傻子"];
+
+        function updateTimer() {
+            const diff = new Date() - new Date('2025-03-07T00:00:00');
+            const d = Math.floor(diff / 86400000);
+            const h = Math.floor((diff % 86400000) / 3600000);
+            const m = Math.floor((diff % 3600000) / 60000);
+            const s = Math.floor((diff % 60000) / 1000);
+            document.getElementById('time-val').innerText = `${d}天${h}时${m}分${s}秒`;
+        }
+
+        function startJourney() {
+            const entrance = document.getElementById('scene-entrance');
+            entrance.style.transform = "scale(2)"; entrance.style.opacity = "0";
+            setTimeout(() => {
+                entrance.style.display = "none";
+                document.getElementById('main-scene').style.opacity = "1";
+                document.getElementById('main-scene').style.pointerEvents = "auto";
+                journeyStarted = true;
+                for(let i=0; i<12; i++) spawnInteractive();
+            }, 1000);
+        }
+
+        function spawnInteractive() {
+            interactives.push(new Interactive(Math.random() > 0.5 ? 'lantern' : 'orange'));
+        }
+
+        // --- 交互: 鼠标心形轨迹 ---
+        window.addEventListener('mousemove', e => {
+            if(!journeyStarted) return;
+            for(let i=0; i<2; i++) {
+                trail.push({ x: e.clientX, y: e.clientY, vx: (Math.random()-0.5)*2, vy: (Math.random()-0.5)*2, life: 1, size: Math.random()*3+2 });
+            }
+        });
+
+        window.addEventListener('mousedown', e => {
+            if (!journeyStarted) return;
+            interactives.forEach((item, index) => {
+                if (Math.hypot(item.x - e.clientX, item.y - e.clientY) < 40) {
+                    const div = document.createElement('div');
+                    div.className = 'floating-quote';
+                    div.style.left = e.clientX + 'px'; div.style.top = e.clientY + 'px';
+                    div.innerText = quotes[Math.floor(Math.random() * quotes.length)];
+                    document.body.appendChild(div);
+                    setTimeout(() => div.remove(), 3000);
+                    interactives.splice(index, 1); spawnInteractive();
+                }
+            });
+        });
+
+        function animate() {
+            ctx.fillStyle = 'rgba(5, 5, 16, 0.2)';
+            ctx.fillRect(0, 0, width, height);
+
+            if (journeyStarted) {
+                if (Math.random() < 0.02) fireworks.push(new Firework());
+                fireworks.forEach((fw, i) => { fw.update(); fw.draw(); if(fw.exploded && fw.particles.length === 0) fireworks.splice(i, 1); });
+                interactives.forEach(item => { item.update(); item.draw(); });
+                trail.forEach((t, i) => {
+                    t.x += t.vx; t.y += t.vy; t.life -= 0.02;
+                    if (t.life <= 0) trail.splice(i, 1);
+                    ctx.fillStyle = `rgba(255, 182, 193, ${t.life})`;
+                    ctx.font = `${t.size * 5}px Arial`; ctx.fillText('❤', t.x, t.y);
+                });
+                updateTimer();
+            }
+            requestAnimationFrame(animate);
+        }
+
+        function resize() { width = canvas.width = window.innerWidth; height = canvas.height = window.innerHeight; }
+        window.addEventListener('resize', resize);
+        resize(); initTextShape(); animate();
+    </script>
+</body>
+</html>
